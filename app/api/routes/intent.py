@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.agents.intent_agent import intent_agent, IntentAgentState
+from app.storage import save_output
 
 router = APIRouter(prefix="/intent", tags=["Intent Agent"])
 
@@ -30,22 +31,33 @@ async def extract_intent(request: IntentRequest):
         result = IntentAgentState(**raw_result)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        response = IntentResponse(
+            status="error",
+            error=str(e),
+        )
+        save_output(request.query, response.model_dump())
+        return response
 
     if result.error:
-        return IntentResponse(
+        response = IntentResponse(
             status="error",
             error=result.error
         )
+        save_output(request.query, response.model_dump())
+        return response
 
     if result.needs_clarification:
-        return IntentResponse(
+        response = IntentResponse(
             status="needs_clarification",
             intent=result.intent.model_dump() if result.intent else None,
             clarification_questions=result.clarification_questions
         )
+        save_output(request.query, response.model_dump())
+        return response
 
-    return IntentResponse(
+    response = IntentResponse(
         status="complete",
         intent=result.intent.model_dump()
     )
+    save_output(request.query, response.model_dump())
+    return response
